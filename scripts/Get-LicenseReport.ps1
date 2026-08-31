@@ -22,6 +22,10 @@
     Directory for the run's log file. Defaults to a "logs" folder next
     to the script.
 
+.PARAMETER IncludeGuests
+    By default, guest/external accounts (UserType -ne "Member") are
+    excluded from the report. Pass this switch to include them.
+
 .EXAMPLE
     Connect-MgGraph -Scopes "User.Read.All","Organization.Read.All"
     .\Get-LicenseReport.ps1
@@ -33,7 +37,13 @@ param(
     [string]$OutputPath,
 
     [Parameter(Mandatory = $false)]
-    [string]$LogDirectory
+    [string]$LogDirectory,
+
+    # By default, guest/external accounts are excluded from the report -
+    # they're not tenant employees, so counting them as "unlicensed"
+    # alongside real staff skews the numbers. Pass this to include them.
+    [Parameter(Mandatory = $false)]
+    [switch]$IncludeGuests
 )
 
 # ---------------------------------------------------------------------------
@@ -108,11 +118,19 @@ try {
 # Pull all users and their license assignments
 # ---------------------------------------------------------------------------
 try {
-    $users = Get-MgUser -All -Property "Id,DisplayName,UserPrincipalName,AccountEnabled,AssignedLicenses" -ErrorAction Stop
+    $users = Get-MgUser -All -Property "Id,DisplayName,UserPrincipalName,AccountEnabled,AssignedLicenses,UserType" -ErrorAction Stop
     Write-Log "Retrieved $($users.Count) user(s) from Graph"
 } catch {
     Write-Log "FAILED to retrieve users: $($_.Exception.Message)" "ERROR"
     exit 1
+}
+
+if (-not $IncludeGuests) {
+    $guestCount = ($users | Where-Object { $_.UserType -ne "Member" }).Count
+    $users = $users | Where-Object { $_.UserType -eq "Member" }
+    if ($guestCount -gt 0) {
+        Write-Log "Excluded $guestCount guest/external account(s) from the report (use -IncludeGuests to include them)"
+    }
 }
 
 # ---------------------------------------------------------------------------
@@ -157,6 +175,21 @@ try {
 }
 
 Write-Log "Run complete. Success: $successCount, Failed: $failureCount, Total: $($users.Count)"
+
+# ---------------------------------------------------------------------------
+# Summary rollup: quick at-a-glance counts without opening the CSV
+# ---------------------------------------------------------------------------
+$licensedCount = ($report | Where-Object { $_.Licensed }).Count
+$unlicensedCount = $report.Count - $licensedCount
+Write-Log "Summary: $licensedCount licensed, $unlicensedCount unlicensed"
+
+$skuBreakdown = $report | Where-Object { $_.Licensed } |
+    ForEach-Object { $_.LicenseSkus -split "; " } |
+    Group-Object | Sort-Object Count -Descending
+
+foreach ($sku in $skuBreakdown) {
+    Write-Log "  $($sku.Name): $($sku.Count) user(s)"
+}
 
 if ($failureCount -gt 0) {
     Write-Log "Completed with errors. See log for details: $LogPath" "WARN"
