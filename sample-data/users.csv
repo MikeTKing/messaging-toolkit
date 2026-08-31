@@ -1,0 +1,7 @@
+FirstName,LastName,UserPrincipalName,Department,Email
+Alice,Nguyen,anguyen@contoso.com,IT,anguyen@contoso.com
+Bob,Smith,bsmith@contoso.com,Finance,bsmith@contoso.com
+,Lopez,clopez@contoso.com,HR,clopez@contoso.com
+Diana,Reyes,,Marketing,dreyes@contoso.com
+Ethan,Park,epark@contoso.com,IT,not-an-email
+Fiona,Ola,fola@contoso.com,Sales,fola@contoso.com

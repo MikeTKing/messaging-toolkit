@@ -1,0 +1,3 @@
+# Generated at runtime — logs are environment-specific and shouldn't be committed
+logs/
+*.log
