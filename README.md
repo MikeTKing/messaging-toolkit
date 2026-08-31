@@ -80,11 +80,14 @@ Full Access, optionally assigns a license, and logs the outcome of each step.
 
 ### `Disable-EmployeeMailbox`
 Offboards a mailbox: converts it to shared (keeps mail accessible without
-consuming a license) and strips every currently assigned license.
+consuming a license) and strips every currently assigned license. Prompts
+for confirmation before making changes (it's a destructive, hard-to-reverse
+action), and pre-checks that the mailbox exists before doing anything.
 
 | Parameter | Required | Description |
 |---|---|---|
 | `-UserPrincipalName` | Yes | UPN of the mailbox to offboard. |
+| `-Force` | No | Skips the confirmation prompt (e.g. for unattended/scripted runs). |
 
 ---
 
