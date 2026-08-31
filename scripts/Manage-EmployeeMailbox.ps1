@@ -170,11 +170,39 @@ function New-EmployeeMailbox {
 # Disable-EmployeeMailbox: converts to shared, strips licenses (offboarding)
 # ---------------------------------------------------------------------------
 function Disable-EmployeeMailbox {
-    [CmdletBinding()]
+    [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = "High")]
     param(
         [Parameter(Mandatory = $true)]
-        [string]$UserPrincipalName
+        [string]$UserPrincipalName,
+
+        # Skips the confirmation prompt. Off by default because this is a
+        # destructive, hard-to-reverse action (license removal + mailbox
+        # type change) — an operator should have to opt in explicitly.
+        [Parameter(Mandatory = $false)]
+        [switch]$Force
     )
+
+    # Pre-flight: make sure the mailbox actually exists before doing anything
+    # destructive, so a typo'd UPN fails fast with a clear message instead of
+    # surfacing as a confusing error partway through offboarding.
+    try {
+        $existing = Get-Mailbox -Identity $UserPrincipalName -ErrorAction Stop
+    } catch {
+        Write-Log "FAILED: Disable-EmployeeMailbox for $UserPrincipalName - mailbox not found: $($_.Exception.Message)" "ERROR"
+        return $false
+    }
+
+    if ($existing.RecipientTypeDetails -eq "SharedMailbox") {
+        Write-Log "$UserPrincipalName is already a shared mailbox - skipping" "WARN"
+        return $true
+    }
+
+    $target = "$UserPrincipalName ($($existing.DisplayName))"
+    $action = "Convert to shared mailbox and remove all licenses"
+    if (-not $Force -and -not $PSCmdlet.ShouldProcess($target, $action)) {
+        Write-Log "Skipped offboarding for $UserPrincipalName (not confirmed)" "WARN"
+        return $false
+    }
 
     try {
         Write-Log "Starting offboarding for $UserPrincipalName"
