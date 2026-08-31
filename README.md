@@ -1,7 +1,8 @@
 # messaging-toolkit
 
-PowerShell tooling for two common IT-admin workflows: bulk user validation/import
-logging, and Microsoft 365 employee mailbox lifecycle (provisioning + offboarding).
+PowerShell tooling for common IT-admin workflows: bulk user validation/import
+logging, Microsoft 365 employee mailbox lifecycle (provisioning + offboarding),
+and license assignment reporting.
 Built and tested against a sandbox Microsoft 365 / Exchange Online / Entra ID tenant.
 
 ## Contents
@@ -10,6 +11,7 @@ Built and tested against a sandbox Microsoft 365 / Exchange Online / Entra ID te
 |---|---|
 | `scripts/Process-Users.ps1` | Reads a CSV of user records, validates each row, logs every success/failure to a timestamped log file. |
 | `scripts/Manage-EmployeeMailbox.ps1` | Provides `New-EmployeeMailbox` (provision + license) and `Disable-EmployeeMailbox` (offboard to shared mailbox) functions for Exchange Online / Microsoft Graph. |
+| `scripts/Get-LicenseReport.ps1` | Pulls every user's license assignment status via Microsoft Graph and exports it to a timestamped CSV. |
 | `sample-data/users.csv` | Sample CSV with a mix of valid and intentionally invalid rows, for testing `Process-Users.ps1`. |
 
 ---
@@ -88,6 +90,41 @@ action), and pre-checks that the mailbox exists before doing anything.
 |---|---|---|
 | `-UserPrincipalName` | Yes | UPN of the mailbox to offboard. |
 | `-Force` | No | Skips the confirmation prompt (e.g. for unattended/scripted runs). |
+
+---
+
+## Get-LicenseReport.ps1
+
+Pulls every user in the tenant and their license assignment status via
+Microsoft Graph, resolves SKU GUIDs to friendly plan names, and exports the
+result to a timestamped CSV. Same logging/try-catch pattern as the other
+scripts — every row's outcome is logged, and a partial failure doesn't lose
+the whole run.
+
+**Requirements:**
+- `Microsoft.Graph.Authentication` and `Microsoft.Graph.Users` modules
+- Connected via `Connect-MgGraph` with at least `User.Read.All`
+  (`Organization.Read.All` is also needed to resolve friendly SKU names —
+  without it the report falls back to raw SKU GUIDs and logs a `WARN`).
+
+**Usage:**
+```powershell
+Connect-MgGraph -Scopes "User.Read.All","Organization.Read.All"
+.\scripts\Get-LicenseReport.ps1
+```
+
+**Parameters:**
+| Name | Required | Description |
+|---|---|---|
+| `-OutputPath` | No | Path for the exported CSV. Defaults to a timestamped file in the current directory. |
+| `-LogDirectory` | No | Where the run's log file is written. Defaults to a `logs` folder next to the script. |
+| `-IncludeGuests` | No | Guest/external accounts are excluded by default (they're not employees, so counting them as "unlicensed" skews the numbers). Pass this to include them. |
+
+**Output columns:** `DisplayName, UserPrincipalName, AccountEnabled, Licensed, LicenseCount, LicenseSkus`
+
+The log also includes a summary rollup at the end of each run: total licensed
+vs. unlicensed counts and a per-SKU breakdown, so you get the headline
+numbers without opening the CSV.
 
 ---
 
